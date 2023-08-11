@@ -9,18 +9,20 @@ const myPeer = new Peer(undefined, {
 const myVideo = document.createElement("video");
 
 const connectedPeers = {};
+let user_Id;
+let screenStream = null;
 
 myPeer.on("open", (id) => {
   user_Id = id;
   socket.emit("join-room", ROOM_ID, id);
 });
 
-const connectNewUser = (userId, stream) => {
-  const call = myPeer.call(userId, stream);
+const connectNewUser = (userId, userStream, screenStream) => {
+  const call = myPeer.call(userId, screenStream);
   const video = document.createElement("video");
 
-  call.on("stream", (userVideoStream) => {
-    addVideoStream(video, userVideoStream);
+  call.on("stream", (userScreenStream) => {
+    addVideoStream(video, userScreenStream);
   });
 
   call.on("close", () => {
@@ -37,47 +39,47 @@ socket.on("user-disconnected", (userId) => {
 
 shareScreen.addEventListener("click", async () => {
   try {
-    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+    screenStream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: true,
     });
 
-    addVideoStream(screenStream, myVideo);
+    addVideoStream(myVideo, screenStream);
+
     myPeer.on("call", (call) => {
-      call.answer(stream);
+      call.answer(screenStream);
       const video = document.createElement("video");
+
       call.on("stream", (userVideoStream) => {
         addVideoStream(video, userVideoStream);
         console.log("user video stream");
       });
     });
+
+    socket.emit("screen-sharing", user_Id);
   } catch (error) {
     console.error("Error sharing screen:", error);
   }
 });
 
-// navigator.mediaDevices
-//   .getUserMedia({
-//     video: false,
-//     audio: true,
-//   })
-//   .then((stream) => {
-//     addVideoStream(myVideo, stream);
+socket.on("user-connected", (userId) => {
+  console.log("userConnected", userId);
+  // connectNewUser(userId, stream);
+});
 
-//     myPeer.on("call", (call) => {
-//       call.answer(stream);
-//       const video = document.createElement("video");
-//       call.on("stream", (userVideoStream) => {
-//         addVideoStream(video, userVideoStream);
-//         console.log("user video stream");
-//       });
-//     });
-
-//     socket.on("user-connected", (userId) => {
-//       console.log("userConnected", userId);
-//       connectNewUser(userId, stream);
-//     });
-//   });
+socket.on("screen-sharing", (userId) => {
+  console.log("User is sharing screen:", userId);
+  navigator.mediaDevices
+    .getUserMedia({ video: true, audio: true })
+    .then((userStream) => {
+      // const screenStream = getScreenSharingStream();
+      console.log(userStream.getAudioTracks());
+      connectNewUser(userId, userStream, screenStream);
+    })
+    .catch((error) => {
+      console.error("Error accessing media devices:", error);
+    });
+});
 
 function addVideoStream(video, stream) {
   video.srcObject = stream;
