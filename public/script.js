@@ -1,4 +1,4 @@
-const socket = io("/");
+const socket = io("http://localhost:4000");
 const videoGrid = document.getElementById("video-grid");
 const myPeer = new Peer(undefined, {
   host: "/",
@@ -6,7 +6,6 @@ const myPeer = new Peer(undefined, {
 });
 
 const myVideo = document.createElement("video");
-myVideo.muted = true;
 
 const connectedPeers = {};
 
@@ -36,7 +35,7 @@ socket.on("user-disconnected", (userId) => {
 
 navigator.mediaDevices
   .getUserMedia({
-    // video: true,
+    video: true,
     audio: true,
   })
   .then((stream) => {
@@ -59,7 +58,7 @@ navigator.mediaDevices
 
 function addVideoStream(video, stream) {
   video.srcObject = stream;
-  video.addEventListener("loadedmetdata", () => {
+  video.addEventListener("loadedmetadata", () => {
     video.play();
   });
   videoGrid.append(video);
