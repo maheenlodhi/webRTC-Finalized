@@ -7,7 +7,6 @@ const myPeer = new Peer(undefined, {
 });
 
 const myVideo = document.createElement("video");
-myVideo.muted = true;
 
 const connectedPeers = {};
 
@@ -82,7 +81,7 @@ shareScreen.addEventListener("click", async () => {
 
 function addVideoStream(video, stream) {
   video.srcObject = stream;
-  video.addEventListener("loadedmetdata", () => {
+  video.addEventListener("loadedmetadata", () => {
     video.play();
   });
   videoGrid.append(video);
