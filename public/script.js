@@ -1,6 +1,6 @@
 const socket = io("http://localhost:4000");
 const videoGrid = document.getElementById("video-grid");
-const shareScreen = document.getElementById("share-screen");
+const shareBtn = document.getElementById("share-btn");
 const myPeer = new Peer(undefined, {
   host: "/",
   port: "3001",
@@ -9,20 +9,22 @@ const myPeer = new Peer(undefined, {
 const myVideo = document.createElement("video");
 
 const connectedPeers = {};
-let user_Id;
-let screenStream = null;
+var currentPeer = null;
+let myVideoStream;
+var peerList = [];
 
 myPeer.on("open", (id) => {
-  user_Id = id;
   socket.emit("join-room", ROOM_ID, id);
 });
 
-const connectNewUser = (userId, userStream, screenStream) => {
-  const call = myPeer.call(userId, screenStream);
-  const video = document.createElement("video");
+const connectNewUser = (userId, stream) => {
+  const call = myPeer.call(userId, stream);
+  currentPeer = call;
 
-  call.on("stream", (userScreenStream) => {
-    addVideoStream(video, userScreenStream);
+  const video = document.createElement("video");
+  call.on("stream", (userVideoStream) => {
+    console.log("userVideoStream", userVideoStream);
+    addVideoStream(video, userVideoStream);
   });
 
   call.on("close", () => {
@@ -32,53 +34,102 @@ const connectNewUser = (userId, userStream, screenStream) => {
   connectedPeers[userId] = call;
 };
 
-socket.on("user-disconnected", (userId) => {
-  console.log("disconnected", userId);
-  if (connectedPeers[userId]) connectedPeers[userId].close();
-});
+let getUserMedia =
+  navigator.getUserMedia ||
+  navigator.webkitGetUserMedia ||
+  navigator.mozGetUserMedia;
 
-shareScreen.addEventListener("click", async () => {
-  try {
-    screenStream = await navigator.mediaDevices.getDisplayMedia({
-      video: true,
-      audio: true,
-    });
-
-    addVideoStream(myVideo, screenStream);
+navigator.mediaDevices
+  .getUserMedia({
+    video: true,
+    audio: true,
+  })
+  .then((stream) => {
+    myVideoStream = stream;
+    window.stream = stream;
+    addVideoStream(myVideo, stream);
 
     myPeer.on("call", (call) => {
-      call.answer(screenStream);
+      call.answer(stream);
       const video = document.createElement("video");
+      currentPeer = call;
 
       call.on("stream", (userVideoStream) => {
-        addVideoStream(video, userVideoStream);
         console.log("user video stream");
+
+        if (!peerList.includes(call.peer)) {
+          addVideoStream(video, userVideoStream);
+          peerList.push(call.peer);
+        }
       });
     });
 
-    socket.emit("screen-sharing", user_Id);
-  } catch (error) {
-    console.error("Error sharing screen:", error);
-  }
-});
-
-socket.on("user-connected", (userId) => {
-  console.log("userConnected", userId);
-  // connectNewUser(userId, stream);
-});
-
-socket.on("screen-sharing", (userId) => {
-  console.log("User is sharing screen:", userId);
-  navigator.mediaDevices
-    .getUserMedia({ video: true, audio: true })
-    .then((userStream) => {
-      // const screenStream = getScreenSharingStream();
-      console.log(userStream.getAudioTracks());
-      connectNewUser(userId, userStream, screenStream);
-    })
-    .catch((error) => {
-      console.error("Error accessing media devices:", error);
+    socket.on("user-connected", (userId) => {
+      console.log("userConnected", userId);
+      connectNewUser(userId, stream);
     });
+
+    socket.on("user-disconnected", (userId) => {
+      console.log("disconnected", userId);
+      if (connectedPeers[userId]) connectedPeers[userId].close();
+    });
+
+    shareBtn.addEventListener("click", (e) => {
+      navigator.mediaDevices
+        .getDisplayMedia({
+          video: {
+            cursor: "always",
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+          },
+        })
+        .then((stream) => {
+          const screenStream = stream;
+          window.stream = stream;
+
+          let videoTrack = screenStream.getVideoTracks()[0];
+
+          if (myPeer) {
+            console.log("Current Peer", currentPeer);
+            const video = document.createElement("video");
+            addVideoStream(video, stream);
+
+            let sender = currentPeer.peerConnection
+              .getSenders()
+              .find(function (s) {
+                return s.track.kind == videoTrack.kind;
+              });
+            sender.replaceTrack(videoTrack);
+            screenSharing = true;
+          }
+        })
+        .catch((err) => {
+          console.log("unable to get display media" + err);
+        });
+    });
+  });
+
+myPeer.on("call", function (call) {
+  getUserMedia(
+    { video: true, audio: true },
+    function (stream) {
+      currentPeer = call;
+      call.answer(stream); // Answer the call with stream.
+      console.log("Init window stream with stream");
+      const video = document.createElement("video");
+      call.on("stream", function (remoteStream) {
+        if (!peerList.includes(call.peer)) {
+          addVideoStream(video, remoteStream);
+          peerList.push(call.peer);
+        }
+      });
+    },
+    function (err) {
+      console.log("Failed to get local stream", err);
+    }
+  );
 });
 
 function addVideoStream(video, stream) {
@@ -87,31 +138,4 @@ function addVideoStream(video, stream) {
     video.play();
   });
   videoGrid.append(video);
-
-  // if (stream.getVideoTracks().length > 0) {
-  //   videoGrid.append(video);
-  // } else {
-  //   const screenVideoContainer = document.getElementById("screen-video");
-  //   screenVideoContainer.srcObject = stream;
-  //   screenVideoContainer.addEventListener("loadedmetadata", () => {
-  //     screenVideoContainer.play();
-
-  //     screenVideoContainer.appendChild(video);
-  //   });
-  // }
 }
-
-// function shareScreenStream(screenStream, user_Id) {
-//   const call = myPeer.call(user_Id, screenStream);
-
-//   const screenVideo = document.createElement("video");
-//   call.on("stream", (userScreenStream) => {
-//     addVideoStream(screenVideo, userScreenStream);
-//   });
-
-//   call.on("close", () => {
-//     screenVideo.remove();
-//   });
-
-//   connectedPeers[user_Id] = call;
-// }
