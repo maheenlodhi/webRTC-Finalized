@@ -34,11 +34,6 @@ const connectNewUser = (userId, stream) => {
   connectedPeers[userId] = call;
 };
 
-let getUserMedia =
-  navigator.getUserMedia ||
-  navigator.webkitGetUserMedia ||
-  navigator.mozGetUserMedia;
-
 navigator.mediaDevices
   .getUserMedia({
     video: true,
@@ -77,13 +72,8 @@ navigator.mediaDevices
     shareBtn.addEventListener("click", (e) => {
       navigator.mediaDevices
         .getDisplayMedia({
-          video: {
-            cursor: "always",
-          },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-          },
+          video: true,
+          audio: true,
         })
         .then((stream) => {
           const screenStream = stream;
@@ -111,31 +101,31 @@ navigator.mediaDevices
     });
   });
 
-myPeer.on("call", function (call) {
-  getUserMedia(
+myPeer.on("call", (call) => {
+  navigator.mediaDevices.getUserMedia(
     { video: true, audio: true },
-    function (stream) {
+    (stream) => {
       currentPeer = call;
-      call.answer(stream); // Answer the call with stream.
+      call.answer(stream); // Answer
       console.log("Init window stream with stream");
       const video = document.createElement("video");
-      call.on("stream", function (remoteStream) {
+      call.on("stream", (remoteStream) => {
         if (!peerList.includes(call.peer)) {
           addVideoStream(video, remoteStream);
           peerList.push(call.peer);
         }
       });
     },
-    function (err) {
+    (err) => {
       console.log("Failed to get local stream", err);
     }
   );
 });
 
-function addVideoStream(video, stream) {
+const addVideoStream = (video, stream) => {
   video.srcObject = stream;
   video.addEventListener("loadedmetadata", () => {
     video.play();
   });
   videoGrid.append(video);
-}
+};
